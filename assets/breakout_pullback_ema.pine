@@ -1,0 +1,148 @@
+//@version=6
+// Breakout Pullback EMA (solo largos) - dibuja cada setup y cada operacion del historial.
+// Replica la logica del .sqx "Breakout_PullbackEMA_XAU_H1_WF_Trend" (SQX, walk-forward + filtro de tendencia) sobre las velas del grafico.
+indicator("Breakout Pullback EMA - setups", overlay = true, max_boxes_count = 500, max_lines_count = 500, max_labels_count = 500, max_bars_back = 5000)
+
+// ---------------------------------------------------------------- parametros (walk-forward + filtro de tendencia, XAUUSD H1)
+N           = input.int(30,    "BreakoutPeriod (maximo de N velas)", minval = 1)
+emaP        = input.int(5,     "EMAPeriod", minval = 1)
+bv          = input.int(120,   "BarsValid (velas de vida de la orden)", minval = 1)
+slM         = input.float(2.0, "SL x ATR", step = 0.1)
+tpM         = input.float(10.0,"TP x ATR (0 = sin TP)", step = 0.1)
+trM         = input.float(0.0, "Trailing x ATR (0 = sin trailing)", step = 0.1)
+actM        = input.float(1.0, "Activacion trailing x ATR", step = 0.1)
+atrP        = input.int(14,    "ATRPeriod", minval = 1)
+eab         = input.int(0,     "ExitAfterBars (0 = sin limite)", minval = 0)
+useTrend    = input.bool(true, "Filtro de tendencia (EMA larga por encima y subiendo)")
+trendP      = input.int(1000,  "TrendEMAPeriod", minval = 1)
+slopeB      = input.int(120,   "Pendiente: comparar con N velas antes", minval = 1)
+showTrendBg = input.bool(true, "Sombrear zonas sin tendencia")
+fromT       = input.time(timestamp("2019-01-01T00:00"), "Desde")
+showExpired = input.bool(true, "Mostrar ordenes caducadas")
+showSetup   = input.bool(true, "Marcar vela de setup")
+
+// ---------------------------------------------------------------- indicadores
+ema = ta.ema(close, emaP)
+atr = ta.atr(atrP)
+hh  = ta.highest(high, N)
+plot(ema, "EMA", color.new(color.orange, 0), 1)
+emaT    = ta.ema(close, trendP)
+trendOk = not useTrend or (close > emaT and emaT > emaT[slopeB])   // en la vela i se evalua con [1]: Close[1] > EMA[1] y EMA[1] > EMA[1 + slopeB]
+plot(useTrend ? emaT : na, "EMA tendencia", color.new(color.purple, 0), 2)
+bgcolor(useTrend and showTrendBg and not trendOk ? color.new(color.gray, 90) : na, title = "Sin tendencia")
+
+// ---------------------------------------------------------------- estado
+var bool  pend  = false
+var float lvl   = na
+var int   pBar  = na
+var float pA    = na
+var line  pLine = na
+var bool  pos   = false
+var float entry = na
+var float sl    = na
+var float sl0   = na
+var float tp    = na
+var float risk  = na
+var int   eBar  = na
+var int   nTr   = 0
+var int   nWin  = 0
+var float sumR  = 0.0
+
+// dibuja una operacion cerrada y devuelve su resultado en R
+f_trade(int b0, int b1, float e, float s0, float t, float px, string why, float rk) =>
+    r  = (px - e) / rk
+    x1 = math.max(b1, b0 + 1)
+    box.new(b0, e, x1, s0, border_color = color.new(color.red, 60), bgcolor = color.new(color.red, 88))
+    if not na(t)
+        box.new(b0, t, x1, e, border_color = color.new(color.green, 60), bgcolor = color.new(color.green, 88))
+    line.new(b0, e, b1, px, color = r >= 0 ? color.lime : color.red, width = 2)
+    label.new(b1, px, why + " " + str.tostring(r, "+0.00;-0.00") + "R", style = r >= 0 ? label.style_label_down : label.style_label_up, color = r >= 0 ? color.green : color.red, textcolor = color.white, size = size.small)
+    r
+
+// ---------------------------------------------------------------- 1) cierre por tiempo (a la apertura)
+if pos and eab > 0 and bar_index - eBar >= eab
+    r = f_trade(eBar, bar_index, entry, sl0, tp, open, "Tiempo", risk)
+    pos := false
+    nTr += 1
+    nWin += r > 0 ? 1 : 0
+    sumR += r
+
+// ---------------------------------------------------------------- 2) caducidad de la orden
+if pend and bar_index - pBar >= bv
+    pend := false
+    if showExpired
+        line.set_x2(pLine, bar_index)
+        line.set_color(pLine, color.new(color.gray, 30))
+        label.new(bar_index, lvl, "caducada", style = label.style_label_left, color = color.new(color.gray, 100), textcolor = color.gray, size = size.tiny)
+    else
+        line.delete(pLine)
+
+// ---------------------------------------------------------------- 3) nueva orden: Close[1] < EMA[1] y filtro de tendencia en la vela anterior
+if time >= fromT and not pos and not pend and close[1] < ema[1] and trendOk[1]
+    pend  := true
+    lvl   := hh[1]
+    pBar  := bar_index
+    pA    := atr[1]
+    pLine := line.new(bar_index, lvl, bar_index + 1, lvl, color = color.blue, style = line.style_dashed, width = 1)
+    if showSetup
+        label.new(bar_index - 1, low[1], "setup", style = label.style_label_up, color = color.new(color.blue, 100), textcolor = color.blue, size = size.tiny)
+
+if pend
+    line.set_x2(pLine, bar_index)
+
+// ---------------------------------------------------------------- 4) ejecucion y gestion dentro de la vela
+if pend and high >= lvl
+    entry := math.max(lvl, open)
+    risk  := slM * pA
+    sl    := entry - risk
+    sl0   := sl
+    tp    := tpM > 0 ? entry + tpM * pA : na
+    pos   := true
+    pend  := false
+    eBar  := bar_index
+    line.set_x2(pLine, bar_index)
+    line.set_style(pLine, line.style_solid)
+    label.new(bar_index, entry, "BUY STOP", style = label.style_label_right, color = color.new(color.blue, 0), textcolor = color.white, size = size.tiny)
+    // misma vela de la entrada: SL si lo toca (conservador); TP solo si el cierre ya lo supera
+    if low <= sl
+        r = f_trade(eBar, bar_index, entry, sl0, tp, sl, "SL", risk)
+        pos := false
+        nTr += 1
+        sumR += r
+    else if not na(tp) and close >= tp
+        r = f_trade(eBar, bar_index, entry, sl0, tp, tp, "TP", risk)
+        pos := false
+        nTr += 1
+        nWin += 1
+        sumR += r
+else if pos
+    if low <= sl
+        r = f_trade(eBar, bar_index, entry, sl0, tp, math.min(sl, open), sl > sl0 ? "Trailing" : "SL", risk)
+        pos := false
+        nTr += 1
+        nWin += r > 0 ? 1 : 0
+        sumR += r
+    else if not na(tp) and high >= tp
+        r = f_trade(eBar, bar_index, entry, sl0, tp, math.max(tp, open), "TP", risk)
+        pos := false
+        nTr += 1
+        nWin += 1
+        sumR += r
+    else if trM > 0 and high - entry >= actM * pA
+        sl := math.max(sl, high - trM * pA)
+
+// stop vivo (incluye el trailing)
+plot(pos ? sl : na, "Stop / trailing", color.new(color.red, 0), 2, plot.style_linebr)
+plot(pos ? tp : na, "TP", color.new(color.green, 0), 1, plot.style_linebr)
+
+// ---------------------------------------------------------------- resumen
+var table tb = table.new(position.top_right, 2, 4, bgcolor = color.new(color.black, 20), border_width = 1)
+if barstate.islast
+    table.cell(tb, 0, 0, "Operaciones", text_color = color.white)
+    table.cell(tb, 1, 0, str.tostring(nTr), text_color = color.white)
+    table.cell(tb, 0, 1, "% acierto", text_color = color.white)
+    table.cell(tb, 1, 1, nTr > 0 ? str.tostring(100.0 * nWin / nTr, "0.0") + "%" : "-", text_color = color.white)
+    table.cell(tb, 0, 2, "R totales", text_color = color.white)
+    table.cell(tb, 1, 2, str.tostring(sumR, "+0.0;-0.0"), text_color = sumR >= 0 ? color.lime : color.red)
+    table.cell(tb, 0, 3, "En curso", text_color = color.white)
+    table.cell(tb, 1, 3, pos ? "Posicion abierta" : pend ? "Orden pendiente" : "-", text_color = color.white)

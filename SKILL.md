@@ -1,95 +1,81 @@
 ---
-name: sqx-plugin-pro
-description: Crea plugins de resultados (ResultsPlugins) para StrategyQuant X con calidad profesional usando Claude. Úsala cuando el usuario quiera diseñar, construir, probar, mejorar o revisar un plugin para la pestaña de resultados de StrategyQuant X (SQX), por ejemplo un clasificador de estrategias, un scorecard, una tabla comparativa, un gráfico propio o cualquier panel que lea estadísticas, operaciones o configuración de una estrategia. Incluye plantilla probada, simulador de SQX sin necesidad del programa y validador de calidad.
+name: hobbiecode-strategyquant
+description: Trabajar con StrategyQuant X (SQX) - crear estrategias .sqx importables en AlgoWizard, leer los datos .dat de SQX, simular y validar en Java (rejilla con precisión M1, walk-forward, entradas aleatorias, Monte Carlo), exportar el setup a TradingView (Pine v6), descargar datos de Dukascopy/Darwinex y configurar instrumentos en el Data Manager, desarrollar snippets propios (columnas de databank, bloques) compilados en el Code Editor web, generar custom projects .cfx, hacer autosuficiente un EA exportado a MT5 y manejar la GUI web de SQX. Úsala siempre que el usuario hable de SQX, StrategyQuant, AlgoWizard, un .sqx/.cfx, "hazme/optimiza una estrategia", walk-forward, Monte Carlo, "pásamelo a TradingView", "actualiza los datos", Data Manager, "configura el instrumento", spread/comisión/swap, snippets, "columna en el databank", "bloque/indicador propio", Code Editor o custom project, aunque no diga la palabra skill.
 ---
 
-# SQX Plugin Pro — plugins de StrategyQuant X con nivel profesional
+# StrategyQuant X: estrategias, optimización y validación (Hobbiecode)
 
-Skill del canal Bot Pulse Trading. Sirve para pasar de "una idea" a un plugin de SQX que se ve, se comporta y se prueba como un producto, aunque quien lo pide no sepa programar.
+Skill de **Hobbiecode** con el método de trabajo y las herramientas para usar Claude con StrategyQuant X:
+crear estrategias, validarlas con rigor, configurar datos e instrumentos y ampliar SQX con snippets propios.
+Responde en el idioma del usuario (está escrita en español), con tablas, conclusiones en negrita y advertencias honestas.
 
-## Reglas que mandan sobre todo lo demás
+> Herramienta de investigación y backtesting. Nada de lo que produce es asesoramiento financiero.
+> Los resultados pasados no garantizan resultados futuros.
 
-1. **El `CLAUDE.md` del propio SQX del usuario manda.** Está en `user\extend\ResultsPlugins\CLAUDE.md` dentro de su instalación. Léelo siempre antes de escribir código. Si lo que dice choca con esta skill (versiones nuevas de SQX cambian mensajes y campos), gana el archivo del usuario. Si no lo encuentras, pídeselo; no inventes campos ni mensajes.
-2. **Nunca prometas resultados.** Un plugin analiza el pasado. No escribas textos como "estrategias ganadoras" o "rentabilidad asegurada". Usa "encaja con las reglas que definiste".
-3. **Aviso legal obligatorio**, siempre el último elemento visible del plugin (ver `references/02-estandar-profesional.md`). No se quita ni se esconde.
-4. **Todo local y sin red.** SQX funciona sin conexión: nada de CDN, fuentes de Google, analíticas ni llamadas a servidores. Si algo necesita una librería, se copia a la carpeta del plugin.
-5. **Privacidad.** No pidas ni guardes claves, contraseñas ni datos de cuentas. No incluyas rutas personales en el código.
-6. **No copies plugins de terceros, de pago ni de academias.** Si el usuario te da uno como referencia, describe lo que hace y escribe el tuyo desde cero.
+## 0. Configuración (lo primero, en cada PC)
 
-## Flujo de trabajo (síguelo en orden)
+La skill usa estos marcadores en sus guías y comandos. Antes de trabajar, **averigua sus valores** y recuérdalos (memoria del proyecto si existe):
 
-### Paso 0 · Contexto
-- Lee `CLAUDE.md` de SQX. Anota: versión, mensajes disponibles, campos de `stats` y de `orders`, límites de licencia (Starter 0 plugins, Pro 3, Ultimate sin límite).
-- Pregunta qué licencia tiene y cuántos plugins ya usa. Si está en el límite, avísale antes de construir.
-- Mira qué carpetas hay en `ResultsPlugins` solo para no pisar nombres. No nombres ni copies lo que haya dentro.
+| Marcador | Qué es | Cómo encontrarlo |
+|---|---|---|
+| `<SQX>` (`$SQX` en bash, `$SQXW` con barras `C:/…`) | Carpeta de la instalación **activa** de SQX (la que tiene `StrategyQuantX.exe` y los datos al día) | Buscar `C:\SQX*`, `C:\StrategyQuant*` o preguntar. Si hay varias, usar la de `user\data\History` con fechas más recientes y confirmarlo con el usuario |
+| `<JAVA>` | El JDK que trae SQX: `<SQX>\j64\bin` (`java.exe`, `javac.exe`, `jar.exe`) | Normalmente no está en el PATH |
+| `<TMP>` (`$SQXTMP`, `$SQXTMPW`) | Carpeta de trabajo **con ruta corta**, p. ej. `C:\sqxtmp` | Java y Python fallan con rutas muy largas; créala si no existe |
+| `<TRABAJO>` | Carpeta donde dejar entregables | Preguntar al usuario |
+| Python | Cualquier Python 3 (solo para `make_project.py`) | `python --version`; en Windows el `python` del PATH puede ser el stub de Microsoft Store |
 
-### Paso 1 · La pregunta del plugin (spec en 5 líneas)
-Antes de código, escribe y confirma con el usuario:
-1. **Pregunta que responde**: "¿qué quiero ver que SQX no me muestra?"
-2. **Datos que necesita**: qué estadísticas (`GET_STATS`), operaciones (`GET_ORDERS`), configuración (`GET_LAST_SETTINGS_XML`) o código (`GET_SOURCE_CODE`).
-3. **Decisión que habilita**: qué hará el usuario con lo que vea.
-4. **Qué muestra en pantalla**: una tabla, un score, un gráfico, una comparación.
-5. **Qué NO hace**: lo que queda fuera de esta primera versión.
-Si el plugin necesita ver **todas** las estrategias a la vez, recuerda que SQX entrega **una cada vez**: el plugin debe guardarlas (ver patrón "almacén" en `references/02-estandar-profesional.md`).
-Ideas listas con su spec: `references/04-ideas-de-plugins.md`.
+En Git Bash, definir las variables al principio de cada comando, por ejemplo:
+```bash
+SQX=/c/SQX_143; SQXW=C:/SQX_143; SQXTMP=/c/sqxtmp; SQXTMPW=C:/sqxtmp; J=$SQX/j64/bin
+```
+(No usar `$TMP`: en Windows ya es la carpeta temporal del sistema.)
 
-### Paso 2 · Arquitectura mínima
-- Un solo `index.html` dentro de su carpeta (`ResultsPlugins\NombreDelPlugin\index.html`). JavaScript puro por defecto; Vue 3 solo si ya hay una copia local de `vue.global.prod.js`.
-- Separa en el mismo archivo, en este orden: **CONFIG** (umbrales, pesos, textos) → **ESTADO** → **COMUNICACIÓN con SQX** → **LÓGICA** (cálculos puros) → **VISTA** (pintar) → **ARRANQUE**.
-- Parte de `assets/plantilla-plugin/index.html`. Ya trae tema claro/oscuro, idiomas, cola de peticiones, almacén persistente, tabla ordenable, exportar CSV, tooltips, gráfico en canvas, estados vacío/cargando/error y aviso legal.
+Rutas fijas dentro de la instalación:
 
-### Paso 3 · Construir
-- Cambia primero **CONFIG** y la función de cálculo. Después la vista. Lo demás de la plantilla se mantiene.
-- Si el plugin necesita **correlaciones, intervalos de confianza, fiabilidad por muestra o una simulación Monte Carlo**, copia lo que haga falta de `assets/patrones/estadistica.js`. Si necesita **cerrojos, envíos sin duplicados, cola de reintentos, repintado sin parpadeo o tooltips que no se cortan**, copia de `assets/patrones/robustez.js`. Están probados; no los reescribas.
-- Todo cálculo muestra su **muestra y su fiabilidad**, y por debajo de un mínimo de operaciones no puntúa (ver `references/07-patrones-de-herramientas-reales.md`).
-- Cada métrica que no sea obvia lleva tooltip de 3 líneas: qué es, cómo leerla con números, para qué sirve.
-- Los umbrales viven en CONFIG y se pueden editar en pantalla (el usuario ajusta a sus reglas). Los tooltips se generan desde esos mismos umbrales para que nunca se contradigan.
-- Textos de interfaz en el objeto de idiomas, no repartidos por el HTML. Mínimo español e inglés.
-
-### Paso 4 · Probar sin SQX
-- Abre `tools/mock_sqx.html` en el navegador con el plugin a probar: simula SQX (tema, idioma, estrategias, `GET_STATS`, `GET_ORDERS`). Sirve para ver casos raros: estrategia sin datos, campos `null`, `-99999999`, cambio de tema a mitad, 50 estrategias.
-- Ejecuta el validador: `python tools/validar_plugin.py ruta/al/index.html`. Corrige todo lo marcado como ERROR; lee los AVISO.
-- Después prueba en SQX real: recarga plugins con el icono de recargar, selecciona estrategias una a una y compara **los mismos números** que muestra SQX. Si no coinciden, el plugin está mal, no SQX.
-
-### Paso 5 · Pulir (nivel producto)
-Recorre `references/03-diseno.md` y la lista de `references/02-estandar-profesional.md`. Si el usuario tiene instalada la skill `impeccable`, úsala para `critique`, `polish` o `harden` sobre el archivo ya funcional; no sustituye al validador.
-
-### Paso 6 · Entrega
-Dile al usuario, en lenguaje llano: dónde copiar la carpeta, que reinicie o recargue plugins, cómo usarlo, qué umbrales puede cambiar, qué limitaciones tiene y que contrastes siempre con SQX. Si hubo errores durante las pruebas, cuéntalos; no los escondas.
-
-## Definición de "hecho" (10/10)
-Un plugin solo se entrega cuando cumple todo esto; si algo no se pudo, se dice:
-- [ ] Spec de 5 líneas confirmada por el usuario y respetada (nada extra sin pedirlo).
-- [ ] `validar_plugin.py` sin ERROR y con los AVISO leídos y explicados.
-- [ ] Probado en `mock_sqx.html` con: sin datos, `null`, `-99999999`, 50 estrategias, nombres largos, tema claro/oscuro, español/inglés y panel pequeño.
-- [ ] Cada cifra mostrada se recalculó a mano con una estrategia y coincide con SQX (o se avisa de que falta esa comprobación).
-- [ ] Un dato ausente nunca cuenta como "cumple" ni como cero.
-- [ ] Muestra pequeña = aviso de fiabilidad, no nota.
-- [ ] Sin red, sin claves, sin rutas personales, con aviso legal.
-- [ ] Informe final honesto: qué se probó, qué no (por ejemplo "no probado en SQX real"), limitaciones y próximos pasos.
-
-## Protocolo de depuración (cuando algo no cuadra)
-1. Reproduce en el simulador con el mismo dato. 2. Imprime la respuesta cruda de SQX y compárala con lo que pinta el plugin. 3. Cambia una sola cosa por intento. 4. Añade al simulador el caso que falló para que no vuelva. 5. Repasa `references/05`, `07` y `08`: casi siempre es una clase de fallo ya conocida (dato ausente, petición duplicada, hora/unidad, estado sin reiniciar).
-
-## Más allá del plugin
-Si el usuario pide algo conectado (un EA, un script, una web, un panel), aplica las mismas reglas: spec corta, parte de algo probado, prueba sin riesgo (simulador, datos sintéticos), revisa con la lista de fallos de `references/08` y entrega con declaración honesta. Para subir el resultado a GitHub usa la skill `publicar-en-github`.
-
-## Cuando el plugin falla
-Pide al usuario el texto exacto del error o una captura de la consola del navegador (F12 dentro del iframe, si SQX lo permite). Corrige un problema cada vez y vuelve a ejecutar el validador. Explica en una frase qué fallaba.
-
-## Archivos de esta skill
-| Archivo | Para qué |
+| Cosa | Ruta |
 |---|---|
-| `references/01-api-sqx.md` | Resumen de mensajes y campos (gana el `CLAUDE.md` del usuario) |
-| `references/02-estandar-profesional.md` | Nivel de calidad, patrones y lista de revisión |
-| `references/03-diseno.md` | Sistema visual: colores, tipografía, densidad, gráficos |
-| `references/04-ideas-de-plugins.md` | Ocho plugins con su spec, para empezar rápido |
-| `references/05-lecciones-proyectos-reales.md` | Lo aprendido construyendo herramientas reales de trading |
-| `references/06-mensajes-para-claude.md` | Los mensajes que el usuario debe escribir a Claude |
-| `references/07-patrones-de-herramientas-reales.md` | Patrones de un panel de cuentas, un agente de backtests y automatizaciones: idempotencia, fiabilidad, simulación, recomendación primero |
-| `references/08-lecciones-copiadores-y-eas.md` | Reconciliar estados, autenticación web, apps WebView, fallos típicos de EAs y cómo leer un backtest con reglas de cuenta |
-| `assets/patrones/estadistica.js` | Pearson, intervalo de Fisher, fiabilidad, percentiles y Monte Carlo (probado) |
-| `assets/patrones/robustez.js` | Cerrojo, envío idempotente, cola de reintentos, repintado por firma y tooltip que cabe (probado) |
-| `assets/plantilla-plugin/index.html` | Plantilla profesional lista para adaptar |
-| `tools/mock_sqx.html` | Simulador de SQX para probar sin el programa |
-| `tools/validar_plugin.py` | Validador de calidad con informe en español |
+| Datos | `<SQX>\user\data\History\<SÍMBOLO>\<SÍMBOLO>_<TF>.dat` |
+| Instrumentos | `<SQX>\user\data\data.db` (SQLite; leer copias con `scripts/SqxDb.java`) |
+| Log | `<SQX>\user\log\StrategyQuant\log_AAAA_MM_DD.log` |
+| Snippets propios | `<SQX>\user\extend\Snippets\SQ\...` (se compilan en el Code Editor web, no con javac) |
+| Proyectos | `<SQX>\user\projects\<Nombre>\project.cfx` |
+| Ejemplos oficiales de estrategias | `<SQX>\internal\web\AlgoWizard\examples\*.sqx` (descomprimir en `<TMP>\ex`) |
+| GUI web (con SQX abierto) | `http://localhost:8080/SQUANT/index.html` y Code Editor en `http://localhost:8080/SQEDITOR/index.html#!/editor`. Ver `references/gui-web.md` |
+
+Con muchos núcleos, las rejillas de `Opt.java` van rápidas: usar `-Xmx8g` o lo que permita la RAM.
+
+## Convenciones de entrega (recomendadas)
+
+- Cada estrategia o entregable en una **subcarpeta numerada** de `<TRABAJO>` (`01 - Nombre`, `02 - …`): listar y usar el siguiente número libre.
+- Dentro: el `.sqx` arriba, `fuente/` con el XML desempaquetado (`META-INF/MANIFEST.MF`, `version.txt`, `strategy_Portfolio.xml`), `herramientas/` si hay código, y un `RESULTADOS.md`.
+- **Nunca sobrescribir una versión anterior**: cada variante es una carpeta nueva; las correcciones se añaden al `RESULTADOS.md` como sección fechada.
+- El usuario comprueba en AlgoWizard antes de seguir: darle siempre cifras de referencia (nº de operaciones, PF, R por año y **la primera operación con fecha, hora y precio**).
+
+## Flujo de trabajo
+
+0. **Datos e instrumentos** (si faltan datos, están desfasados o hay que cambiar costes): descargar o actualizar desde el Data Manager (Dukascopy M1 o Darwinex tick), comprobarlo en el log y en `data.db`, y revisar el instrumento enlazado al símbolo. Ver `references/datos-e-instrumentos.md`.
+1. **Entender la regla** y escribirla en pseudocódigo con `[1]` (solo velas cerradas). Si algo no se puede hacer con bloques estándar, decirlo (p. ej. SL en el mínimo de la vela de ruptura: SQX calcula el SL al **colocar** la orden, no al ejecutarse).
+2. **Construir el .sqx** partiendo de `assets/plantilla_strategy_Portfolio.xml` o de un ejemplo oficial. Sintaxis, bloques verificados y empaquetado: `references/sqx-xml.md`.
+3. **Simular** con las herramientas Java (`scripts/`): leer datos, rejilla en H1, re-simular lo mejor en M1. Ver `references/datos-y-simulador.md`. `Opt.java` es una plantilla hecha para la estrategia de ejemplo (Breakout Pullback EMA): adaptar `sim()` a cada estrategia. Comprobar siempre un precio conocido tras leer los datos.
+4. **Validar la robustez** antes de recomendar nada: meseta (no pico), entradas aleatorias, walk-forward, sensibilidad parámetro a parámetro, años laterales, Monte Carlo. Ver `references/robustez.md`.
+5. **Entregar**: carpeta numerada + `RESULTADOS.md` (datos, costes, parámetros, tabla por año en R, perfil: % acierto, rachas, DD, MC p95, advertencias, ficheros) + instrucciones para AlgoWizard.
+6. **TradingView** si lo pide: indicador Pine v6 que replica la lógica + `.md` de instrucciones. Ver `references/tradingview.md`.
+7. **Snippets propios** (columnas, bloques, indicadores, MC, MM…): escribir el `.java` en `user\extend\Snippets\SQ\<Tipo>\` siguiendo los internos, compilar con "Compile all" en el Code Editor web, recargar la UI (si el usuario lo autoriza) y comprobar contra una columna o bloque interno equivalente. Ver `references/snippets-api.md` y `assets/snippets/`.
+8. **Exportar a MT5 / distribuir el EA**: integrar los indicadores Sq (`iCustom`) en el `.mq5` y comprobar con un backtest en MT5 que original e integrado dan las mismas operaciones. Ver `references/exportar-mq5.md` (`scripts/PatchEA.java` es el ejemplo para un EA concreto).
+9. **Custom projects**: generar el `.cfx` a partir de las tareas del Builder, Retester y Optimizer del usuario con `scripts/make_project.py`, instalarlo en `user\projects\` y abrirlo en la GUI **sin lanzarlo**. Ver `references/proyectos-cfx.md`.
+
+## Reglas de oro (errores que ya pasaron)
+
+- **Decimales de los .dat**: los M1 de Dukascopy (XAUUSD, NQ, SP) usan **6 decimales en el fichero** (`SqxDat.read(path, 6)`), aunque `data.db` diga otra cosa. Con 5 los precios salen ×10 y los costes quedan 10 veces más pequeños sin que los R cambien: el error no salta a la vista. Comprobar siempre un precio real.
+- Si hay varias instalaciones de SQX, usar **la activa** (la de datos más recientes). Ojo con el año de las fechas que diga el usuario.
+- AND en SQX es **binario**: dos `<Block>` por `<Item key="AND">`, anidar para más condiciones.
+- No editar XML con awk/sed de registros (`RS=`) ni con `&` en reemplazos: rompe el fichero. Usar Edit o un pequeño programa Java con `replaceAll("(?s)…")` (ver `scripts/Make05.java`).
+- Validar el XML con `[xml](Get-Content … -Raw -Encoding UTF8)` antes de empaquetar, y empaquetar con rutas con `/` (`scripts/pack_sqx.ps1`).
+- No elegir parámetros mirando el periodo fuera de muestra. Si un filtro se descubre después de ver un drawdown, **decirlo** como sesgo.
+- Las cifras del simulador propio hay que confirmarlas con el backtest de SQX. No afirmar que algo se ha probado en SQX, MT5 o TradingView si no se ha hecho.
+- Descomprimir y borrar en carpetas nuevas con nombre explícito (nunca `rm -rf *` tras un `cd`).
+- Los instrumentos se cambian **desde la interfaz de SQX**, no escribiendo en `data.db`. Un símbolo de un bróker puede usar el instrumento de otro (p. ej. datos de Dukascopy con costes de Darwinex), así que un cambio afecta a todos los símbolos enlazados.
+- **Nunca escribir contraseñas** (acceso remoto de SQX, cuentas de bróker). Si hace falta iniciar sesión, lo hace el usuario.
+- En la GUI web: hacer una captura antes de clicar, saber que el contenido va dentro de iframes y comprobar cada guardado fuera de la GUI (`data.db`, el log). Recargar la interfaz, lanzar proyectos o retestear databanks **solo si el usuario lo dice**. Crear vistas y databanks nuevos en vez de tocar los suyos.
+- En los `.sqx` que se entregan, solo bloques estándar, para que importen sin plugins.
+- Si se aprende algo nuevo, proponer al usuario añadirlo a esta skill.
